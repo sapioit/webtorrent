@@ -1,6 +1,6 @@
-var extend = require('xtend')
 var fixtures = require('webtorrent-fixtures')
 var fs = require('fs')
+var MemoryChunkStore = require('memory-chunk-store')
 var series = require('run-series')
 var test = require('tape')
 var TrackerServer = require('bittorrent-tracker/server')
@@ -29,7 +29,7 @@ function magnetDownloadTest (t, serverType) {
     trackerStartCount += 1
   })
 
-  var parsedTorrent = extend(fixtures.leaves.parsedTorrent)
+  var parsedTorrent = Object.assign({}, fixtures.leaves.parsedTorrent)
   var magnetURI, client1, client2
 
   series([
@@ -43,7 +43,7 @@ function magnetDownloadTest (t, serverType) {
         ? 'http://127.0.0.1:' + port + '/announce'
         : 'udp://127.0.0.1:' + port
 
-      parsedTorrent.announce = [ announceUrl ]
+      parsedTorrent.announce = [announceUrl]
       magnetURI = 'magnet:?xt=urn:btih:' + parsedTorrent.infoHash + '&tr=' + encodeURIComponent(announceUrl)
 
       client1 = new WebTorrent({ dht: false })
@@ -59,7 +59,7 @@ function magnetDownloadTest (t, serverType) {
           'Leaves of Grass by Walt Whitman.epub'
         ]
 
-        torrent.on('noPeers', function (announceType) {
+        torrent.once('noPeers', function (announceType) {
           t.equal(announceType, 'tracker', 'noPeers event seen with correct announceType')
         })
 
@@ -70,7 +70,7 @@ function magnetDownloadTest (t, serverType) {
         })
       })
 
-      client1.add(parsedTorrent)
+      client1.add(parsedTorrent, { store: MemoryChunkStore })
     },
 
     function (cb) {
@@ -102,7 +102,7 @@ function magnetDownloadTest (t, serverType) {
         }
       })
 
-      client2.add(magnetURI)
+      client2.add(magnetURI, { store: MemoryChunkStore })
     }
 
   ], function (err) {

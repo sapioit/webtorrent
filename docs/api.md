@@ -3,7 +3,7 @@
 WebTorrent is a streaming torrent client for **Node.js** and the **web**. WebTorrent
 provides the same API in both environments.
 
-To use WebTorrent in the browser, [WebRTC] support is required (Chrome, Firefox, Opera).
+To use WebTorrent in the browser, [WebRTC] support is required (Chrome, Firefox, Opera, Safari).
 
 [webrtc]: https://en.wikipedia.org/wiki/WebRTC
 
@@ -18,11 +18,13 @@ npm install webtorrent
 ```js
 var client = new WebTorrent()
 
-var torrentId = 'magnet:?xt=urn:btih:6a9759bffd5c0af65319979fb7832189f4f3c35d&dn=sintel.mp4&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&tr=wss%3A%2F%2Ftracker.webtorrent.io&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fsintel-1024-surround.mp4'
+var torrentId = 'magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel&tr=udp%3A%2F%2Fexplodie.org%3A6969&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969&tr=udp%3A%2F%2Ftracker.empire-js.us%3A1337&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=wss%3A%2F%2Ftracker.btorrent.xyz&tr=wss%3A%2F%2Ftracker.fastcast.nz&tr=wss%3A%2F%2Ftracker.openwebtorrent.com&ws=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2F&xs=https%3A%2F%2Fwebtorrent.io%2Ftorrents%2Fsintel.torrent'
 
 client.add(torrentId, function (torrent) {
-  // Torrents can contain many files. Let's use the first.
-  var file = torrent.files[0]
+  // Torrents can contain many files. Let's use the .mp4 file
+  var file = torrent.files.find(function (file) {
+    return file.name.endsWith('.mp4')
+  })
 
   // Display the file by adding it to the DOM. Supports video, audio, image, etc. files
   file.appendTo('body')
@@ -51,19 +53,20 @@ If `opts` is specified, then the default options (shown below) will be overridde
 
 ```js
 {
-  dht: Boolean|Object,     // Enable DHT (default=true), or options object for DHT
   maxConns: Number,        // Max number of connections per torrent (default=55)
   nodeId: String|Buffer,   // DHT protocol node ID (default=randomly generated)
   peerId: String|Buffer,   // Wire protocol peer ID (default=randomly generated)
-  tracker: Boolean|Object  // Enable trackers (default=true), or options object for Tracker
+  tracker: Boolean|Object, // Enable trackers (default=true), or options object for Tracker
+  dht: Boolean|Object,     // Enable DHT (default=true), or options object for DHT
+  webSeeds: Boolean        // Enable BEP19 web seeds (default=true)
 }
 ```
 
 For possible values of `opts.dht` see the
-[`bittorrent-dht` documentation](https://github.com/feross/bittorrent-dht#dht--new-dhtopts).
+[`bittorrent-dht` documentation](https://github.com/webtorrent/bittorrent-dht#dht--new-dhtopts).
 
 For possible values of `opts.tracker` see the
-[`bittorrent-tracker` documentation](https://github.com/feross/bittorrent-tracker#client).
+[`bittorrent-tracker` documentation](https://github.com/webtorrent/bittorrent-tracker#client).
 
 ## `client.add(torrentId, [opts], [function ontorrent (torrent) {}])`
 
@@ -74,7 +77,7 @@ Start downloading a new torrent.
 - magnet uri (string)
 - torrent file (buffer)
 - info hash (hex string or buffer)
-- parsed torrent (from [parse-torrent](https://github.com/feross/parse-torrent))
+- parsed torrent (from [parse-torrent](https://github.com/webtorrent/parse-torrent))
 - http/https url to a torrent file (string)
 - filesystem path to a torrent file (string) *(Node.js only)*
 
@@ -82,7 +85,7 @@ If `opts` is specified, then the default options (shown below) will be overridde
 
 ```js
 {
-  announce: [],              // Torrent trackers to use (added to list in .torrent or magnet uri)
+  announce: [String],        // Torrent trackers to use (added to list in .torrent or magnet uri)
   getAnnounceOpts: Function, // Custom callback to allow sending extra parameters to the tracker
   maxWebConns: Number,       // Max number of simultaneous connections per web seed [default=4]
   path: String,              // Folder to download files to (default=`/tmp/webtorrent/`)
@@ -122,7 +125,7 @@ Or, an **array of `string`, `File`, `Buffer`, or `stream.Readable` objects**.
 
 If `opts` is specified, it should contain the following types of options:
 
-- options for [create-torrent](https://github.com/feross/create-torrent#createtorrentinput-opts-function-callback-err-torrent-) (to allow configuration of the .torrent file that is created)
+- options for [create-torrent](https://github.com/webtorrent/create-torrent#createtorrentinput-opts-function-callback-err-torrent-) (to allow configuration of the .torrent file that is created)
 - options for `client.add` (see above)
 
 If `onseed` is specified, it will be called when the client has begun seeding the file.
@@ -152,10 +155,19 @@ client.seed(buf, cb)
 Emitted when a torrent is ready to be used (i.e. metadata is available and store is
 ready). See the torrent section for more info on what methods a `torrent` has.
 
+## `client.on('error', function (err) {})`
+
+Emitted when the client encounters a fatal error. The client is automatically
+destroyed and all torrents are removed and cleaned up when this occurs.
+
+Always listen for the 'error' event.
+
 ## `client.remove(torrentId, [function callback (err) {}])`
 
 Remove a torrent from the client. Destroy all connections to peers and delete all saved
 file data. If `callback` is specified, it will be called when file data is removed.
+
+*Note: This method does not currently delete torrent data (in e.g. `/tmp/webtorrent/...`, see the `path` option to `client.add`). Until this is fixed, please implement it yourself (consider using the `rimraf` npm package).
 
 ## `client.destroy([function callback (err) {}])`
 
@@ -184,7 +196,7 @@ Total download progress for all **active** torrents, from 0 to 1.
 
 ## `client.ratio`
 
-Aggregate "seed ratio" for all torrents (uploaded / downloaded), from 0 to 1.
+Aggregate "seed ratio" for all torrents (uploaded / downloaded).
 
 
 # Torrent API
@@ -240,7 +252,7 @@ Torrent download progress, from 0 to 1.
 
 ## `torrent.ratio`
 
-Torrent "seed ratio" (uploaded / downloaded), from 0 to 1.
+Torrent "seed ratio" (uploaded / downloaded).
 
 ## `torrent.numPeers`
 
@@ -309,7 +321,15 @@ Marks a range of pieces as critical priority to be downloaded ASAP. From `start`
 Create an http server to serve the contents of this torrent, dynamically fetching the
 needed torrent pieces to satisfy http requests. Range requests are supported.
 
-Returns an `http.Server` instance (got from calling `http.createServer`). If `opts` is specified, it is passed to the `http.createServer` function.
+Returns an `http.Server` instance (got from calling `http.createServer`). If
+`opts` is specified, it can have the following properties:
+
+```js
+{
+  origin: String // Allow requests from specific origin. `false` for same-origin. [default: '*']
+  hostname: String // If specified, only allow requests whose `Host` header matches this hostname. Note that you should not specify the port since this is automatically determined by the server. Ex: `localhost` [default: `undefined`]
+}
+```
 
 Visiting the root of the server `/` will show a list of links to individual files. Access
 individual files at `/<index>` where `<index>` is the index in the `torrent.files` array
@@ -346,6 +366,14 @@ connections, nor does it pause the streams of existing connections or their wire
 
 Resume connecting to new peers.
 
+## `torrent.rescanFiles([function callback (err) {}])`
+
+Verify the hashes of all pieces in the store and update the bitfield for any new valid
+pieces. Useful if data has been added to the store outside WebTorrent, e.g. if another
+process puts a valid file in the right place. Once the scan is complete,
+`callback(null)` will be called (if provided), unless the torrent was destroyed during
+the scan, in which case `callback` will be called with an error.
+
 ## `torrent.on('infoHash', function () {})`
 
 Emitted when the info hash of the torrent has been determined.
@@ -371,6 +399,14 @@ listen to this event, but it may aid in debugging.
 Emitted when the torrent encounters a fatal error. The torrent is automatically destroyed
 and removed from the client when this occurs.
 
+**Note:** Torrent errors are emitted at `torrent.on('error')`. If there are no
+'error' event handlers on the torrent instance, then the error will be emitted at
+`client.on('error')`. This prevents throwing an uncaught exception (unhandled
+'error' event), but it makes it impossible to distinguish client errors versus
+torrent errors. Torrent errors are not fatal, and the client is still usable
+afterwards. Therefore, always listen for errors in both places
+(`client.on('error')` and `torrent.on('error')`).
+
 ## `torrent.on('done', function () {})`
 
 Emitted when all the torrent files have been downloaded.
@@ -379,7 +415,7 @@ Here is a usage example:
 
 ```js
 torrent.on('done', function(){
-  console.log('torrent finished downloading');
+  console.log('torrent finished downloading')
   torrent.files.forEach(function(file){
      // do something with file
   })
@@ -394,7 +430,7 @@ instance:
 ```js
 torrent.on('download', function (bytes) {
   console.log('just downloaded: ' + bytes)
-  console.log('total downloaded: ' + torrent.downloaded);
+  console.log('total downloaded: ' + torrent.downloaded)
   console.log('download speed: ' + torrent.downloadSpeed)
   console.log('progress: ' + torrent.progress)
 })
@@ -407,9 +443,9 @@ Emitted whenever data is uploaded. Useful for reporting the current torrent stat
 ## `torrent.on('wire', function (wire) {})`
 
 Emitted whenever a new peer is connected for this torrent. `wire` is an instance of
-[`bittorrent-protocol`](https://github.com/feross/bittorrent-protocol), which is a
+[`bittorrent-protocol`](https://github.com/webtorrent/bittorrent-protocol), which is a
 node.js-style duplex stream to the remote peer. This event can be used to specify
-[custom BitTorrent protocol extensions](https://github.com/feross/bittorrent-protocol#extension-api).
+[custom BitTorrent protocol extensions](https://github.com/webtorrent/bittorrent-protocol#extension-api).
 
 Here is a usage example:
 
@@ -423,7 +459,7 @@ torrent1.on('wire', function (wire, addr) {
 ```
 
 See the `bittorrent-protocol`
-[extension api docs](https://github.com/feross/bittorrent-protocol#extension-api) for more
+[extension api docs](https://github.com/webtorrent/bittorrent-protocol#extension-api) for more
 information on how to define a protocol extension.
 
 ## `torrent.on('noPeers', function (announceType) {})`
@@ -444,6 +480,14 @@ File path, as specified by the torrent. *Example: 'some-folder/some-filename.txt
 
 File length (in bytes), as specified by the torrent. *Example: 12345*
 
+## `file.downloaded`
+
+Total *verified* bytes received from peers, for this file.
+
+## `file.progress`
+
+File download progress, from 0 to 1.
+
 ## `file.select()`
 
 Selects the file to be downloaded, but at a lower priority than files with streams.
@@ -453,6 +497,8 @@ Useful if you know you need the file at a later stage.
 
 Deselects the file, which means it won't be downloaded unless someone creates a stream
 for it.
+
+*Note: This method is currently not working as expected, see [dcposch answer on #164](https://github.com/webtorrent/webtorrent/issues/164) for a nice work around solution.
 
 ## `stream = file.createReadStream([opts])`
 
@@ -486,7 +532,7 @@ file.getBuffer(function (err, buffer) {
 })
 ```
 
-## `file.appendTo(rootElem, [function callback (err, elem) {}])` *(browser only)*
+## `file.appendTo(rootElem, [opts], [function callback (err, elem) {}])` *(browser only)*
 
 Show the file in a the browser by appending it to the DOM. This is a powerful function
 that handles many file types like video (.mp4, .webm, .m4v, etc.), audio (.m4a, .mp3,
@@ -503,8 +549,21 @@ the file will be downloaded then displayed.
 will be shown in. A new DOM node will be created for the content and appended to
 `rootElem`.
 
-`callback` will be called once the file is visible to the user. `callback` is called
-with an `Error` (or `null`) and the new DOM node that is displaying the content.
+If provided, `opts` can contain the following options:
+
+- `autoplay`: Autoplay video/audio files (default: `false`)
+- `muted`: Mute video/audio files (default: `false`)
+- `controls`: Show video/audio player controls (default: `true`)
+- `maxBlobLength`: Files above this size will skip the "blob" strategy and fail (default: `200 * 1000 * 1000` bytes)
+
+Note: Modern browsers tend to block media that autoplays with audio (here's the
+[Chrome policy](https://developers.google.com/web/updates/2017/09/autoplay-policy-changes)
+for instance) so if you set `autoplay` to `true`, it's a good idea to also set
+`muted` to `true`.
+
+If provided, `callback` will be called once the file is visible to the user.
+`callback` is called with an `Error` (or `null`) and the new DOM node that is
+displaying the content.
 
 ```js
 file.appendTo('#containerElement', function (err, elem) {
@@ -513,9 +572,38 @@ file.appendTo('#containerElement', function (err, elem) {
 })
 ```
 
-## `file.renderTo(elem, [function callback (err, elem) {}])` *(browser only)*
+Streaming support depends on support for `MediaSource` API in the browser. All
+modern browsers have `MediaSource` support.
 
-Like `file.appendTo` but renders directly into given element (or CSS selector).
+For video and audio, webtorrent tries multiple methods of playing the file:
+
+- [`videostream`][videostream] -- best option, supports streaming **with seeking**,
+  but only works with MP4-based files for now (uses `MediaSource` API)
+- [`mediasource`][mediasource] -- supports more formats, supports streaming
+  **without seeking** (uses `MediaSource` API)
+- Blob URL -- supports the most formats of all (anything the `<video>` tag supports
+  from an http url), **with seeking**, but **does not support streaming** (entire
+  file must be downloaded first)
+
+[videostream]: https://www.npmjs.com/package/videostream
+[mediasource]: https://www.npmjs.com/package/mediasource
+
+The Blob URL strategy will not be attempted if the file is over
+`opts.maxBlobLength` (200 MB by default) since it requires the entire file to be
+downloaded before playback can start which gives the appearance of the `<video>`
+tag being stalled. If you increase the size, be sure to indicate loading progress
+to the user in the UI somehow.
+
+For other media formats, like images, the file is just added to the DOM.
+
+For text-based formats, like html files, pdfs, etc., the file is added to the DOM
+via a sandboxed `<iframe>` tag.
+
+## `file.renderTo(elem, [opts], [function callback (err, elem) {}])` *(browser only)*
+
+Like `file.appendTo` but renders directly into given element (or CSS selector). For
+example, to render a video, provide a `<video>` element like
+`file.renderTo('video#player')`.
 
 ## `file.getBlob(function callback (err, blob) {})` *(browser only)*
 
